@@ -1,0 +1,31 @@
+{
+  "n_events": 100000,
+  "cutoff_train_end_ts": 887039271,
+  "cutoff_val_end_ts": 891036414,
+  "cutoff_train_end": "1998-02-09 15:47:51 UTC",
+  "cutoff_val_end": "1998-03-27 22:06:54 UTC",
+  "first_event": "1997-09-20 03:05:10 UTC",
+  "last_event": "1998-04-22 23:10:38 UTC",
+  "vocab_size_n": 1573,
+  "max_hist": 20,
+  "counts": {
+    "train": {
+      "total": 70001,
+      "unknown_target": 0,
+      "empty_history": 1480,
+      "kept": 68521
+    },
+    "val": {
+      "total": 14999,
+      "unknown_target": 217,
+      "empty_history": 307,
+      "kept": 14475
+    },
+    "test": {
+      "total": 15000,
+      "unknown_target": 333,
+      "empty_history": 332,
+      "kept": 14335
+    }
+  }
+}
