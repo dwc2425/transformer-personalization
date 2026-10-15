@@ -1,0 +1,19 @@
+{
+  "user": 405,
+  "counts": [
+    514,
+    114,
+    109
+  ],
+  "cuts": {
+    "train_end_ts": 885548474,
+    "val_end_ts": 885549192
+  },
+  "baselines": {
+    "majority_class_rating": 1,
+    "majority_test_acc": 90.82568883895874,
+    "train_mean_rating": 2.031128406524658,
+    "mean_test_rmse": 1.0272436141967773
+  },
+  "dataset": "MovieLens 100K (ml-100k)"
+}
