@@ -23,6 +23,15 @@ def select_users(r, k=3, min_groups=10):
     return list(g.index[:k]), g
  
  
+def eligible_users(r, min_ratings=100, min_groups=10):
+    """Data-quality filter: keep users with MORE than min_ratings ratings (100 or fewer are dropped).
+    Also requires >= min_groups distinct timestamps so a chronological 70/15/15 split is possible.
+    Uses only counts and timestamps, never model performance."""
+    g = r.groupby("user").agg(n=("rating", "size"), groups=("ts", "nunique"))
+    g = g[(g.n > min_ratings) & (g.groups >= min_groups)].sort_values(["n", "groups"], ascending=False)
+    return [int(u) for u in g.index], g
+
+
 def chrono_split(df, fr=(0.70, 0.15, 0.15)):
     """Sort by timestamp; cut only at timestamp boundaries (ties stay together)."""
     df = df.sort_values(["ts", "item"], kind="stable").reset_index(drop=True)
