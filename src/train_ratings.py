@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
  
 import rating_data as rd
-from rating_models import LogisticRegression5, GenreTransformer
+from rating_models import LogisticRegression5, GenreTransformer, LogisticRegressionSyn, GenreSynopsisTransformer
  
  
 def set_seed(s):
@@ -34,7 +34,9 @@ def evaluate(model, x, y):
  
 def run(name, data, a, out_dir):
     set_seed(a.seed)
-    model = LogisticRegression5() if name == "lr" else GenreTransformer()
+    model = {"lr": lambda: LogisticRegression5(), "attn": lambda: GenreTransformer(),
+             "lr_syn": lambda: LogisticRegressionSyn(a.k_syn),
+             "attn_syn": lambda: GenreSynopsisTransformer(a.k_syn)}[name]()
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
     loss_fn = nn.CrossEntropyLoss()  # RAW logits
     xtr, ytr = data["train"]; N = len(ytr)
@@ -97,7 +99,12 @@ if __name__ == "__main__":
     ap.add_argument("--root", required=True)
     ap.add_argument("--user", type=int, default=None, help="single user; default = ALL eligible users")
     ap.add_argument("--min_ratings", type=int, default=100, help="keep users with MORE than this many ratings")
+    ap.add_argument("--synopsis", default=None, help="CSV with title[,year],plot -> also runs lr_syn and attn_syn (E4)")
+    ap.add_argument("--k_syn", type=int, default=16, help="synopsis feature dimension (TF-IDF -> SVD)")
     ap.add_argument("--max_users", type=int, default=None, help="debug: cap number of users")
+    ap.add_argument("--cohort", choices=["eligible", "dropped"], default="eligible",
+                    help="eligible = > min_ratings (default); dropped = the users the filter removes (for E3)")
+    ap.add_argument("--shard", default="0/1", help="i/n: run every n-th user starting at i (parallel runs)")
     ap.add_argument("--epochs", type=int, default=300)
     ap.add_argument("--patience", type=int, default=0, help="early-stop patience; 0 = disabled, run all epochs")
     ap.add_argument("--lr", type=float, default=3e-3)
@@ -110,18 +117,35 @@ if __name__ == "__main__":
     eligible, _ = rd.eligible_users(r, min_ratings=a.min_ratings)
     print(f"users: {n_all} total -> {len(eligible)} eligible (> {a.min_ratings} ratings), "
           f"{n_all - len(eligible)} dropped")
+    if a.cohort == "dropped":
+        eligible, _ = rd.dropped_users(r, min_ratings=a.min_ratings)
+        print(f"cohort=dropped: {len(eligible)} users with <= {a.min_ratings} ratings and >= 10 timestamps")
     if a.user is not None:
-        if a.user not in eligible:
+        if a.cohort == "eligible" and a.user not in eligible:
             raise SystemExit(f"user {a.user} fails the filter (> {a.min_ratings} ratings, >= 10 timestamps)")
         users = [a.user]
     else:
         users = eligible[:a.max_users] if a.max_users else eligible
+        si, sn = (int(x) for x in a.shard.split("/"))
+        users = users[si::sn]
     os.makedirs(a.out, exist_ok=True)
-    json.dump({"min_ratings": a.min_ratings, "n_total": n_all, "n_eligible": len(eligible), "users_run": users},
-              open(os.path.join(a.out, "filter.json"), "w"), indent=2)
+    syn = None
+    if a.synopsis:
+        _, movies = rd.load(a.root)
+        syn, cov = rd.synopsis_features(movies, a.synopsis, k=a.k_syn, seed=a.seed)
+        print(f"synopsis: matched {cov['matched']}/{cov['total']} movies ({100 * cov['fraction']:.1f}%)")
+        json.dump(cov, open(os.path.join(a.out, "synopsis_coverage.json"), "w"), indent=2)
+    json.dump({"min_ratings": a.min_ratings, "cohort": a.cohort, "n_total": n_all, "n_eligible": len(eligible),
+               "shard": a.shard, "users_run": users},
+              open(os.path.join(a.out, f"filter_{a.shard.replace('/', 'of')}.json"), "w"), indent=2)
+    names = ("lr", "attn") + (("lr_syn", "attn_syn") if syn is not None else ())
     for user in users:
+        out_dir = os.path.join(a.out, f"user{user}")
+        if all(os.path.exists(os.path.join(out_dir, f"{n}_results.json")) for n in names):
+            print(f"user {user}: already done, skipping (resume)")
+            continue
         try:
-            raw, (tr, va, te), cuts = rd.build(a.root, user)
+            raw, (tr, va, te), cuts = rd.build(a.root, user, synopsis=syn)
         except AssertionError as e:  # e.g. no valid chronological cut points
             print(f"user {user}: skipped ({e})")
             continue
@@ -132,5 +156,6 @@ if __name__ == "__main__":
                 "dataset": "MovieLens 100K (ml-100k)"}
         json.dump(info, open(os.path.join(out_dir, "split.json"), "w"), indent=2)
         print("user", user, info["counts"], f"majority_test_acc {info['baselines']['majority_test_acc']:.1f}")
-        for name in ("lr", "attn"):
-            run(name, data, a, out_dir)
+        base = {k: (x[:, :19], y) for k, (x, y) in data.items()}  # genre-only view for lr / attn
+        for name in names:
+            run(name, data if name.endswith("_syn") else base, a, out_dir)
