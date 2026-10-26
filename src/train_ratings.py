@@ -7,6 +7,8 @@ import argparse, json, os, random, time
 import numpy as np
 import torch
 import torch.nn as nn
+
+torch.set_num_threads(1)  # tiny models: 1 thread each is far faster and lets runs share cores
  
 import rating_data as rd
 from rating_models import LogisticRegression5, GenreTransformer, LogisticRegressionSyn, GenreSynopsisTransformer
