@@ -90,9 +90,32 @@ $+2.4$ points for the transformer ($[-0.4, +5.1]$) and $+2.2$ for LR ($[-1.1, +5
 99\%, so we cannot claim the filter raises accuracy, only that it gives cleaner and less variable estimates.
 
 \section{Movie synopsis context}
-The synopsis experiment is implemented (one extra context token built from a TF--IDF/SVD synopsis vector, $D=16$,
-compared with genre-only models on identical users, splits and seeds) and tested for correctness, but
-ml-100k contains no plot text. \textbf{Results are pending a synopsis file} (title, year, plot).
+\textbf{Method.} Each movie's Wikipedia plot (Wikipedia Movie Plots dataset, matched to MovieLens by title and year; 1{,}236 of
+1{,}682 movies, 73.5\%, covering about 90\% of ratings) is turned into a 16-dimensional vector (TF--IDF, then SVD, using plot
+text only and no ratings). The transformer receives it as one extra context token alongside the 19 genre tokens ($D=16$,
+3{,}253 parameters); LR receives it as 16 extra features. Movies without a plot get a zero vector. All models use the same
+361 users, splits, seeds, and 300 epochs.
+\begin{table}[h]\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & \shortstack{Mean acc\\best-val} & \shortstack{Lift over\\majority} & \shortstack{Paired diff vs.\\genre-only} & \shortstack{Optimal\\epoch} \\
+\midrule
+LR, genres only & 33.7 & $+0.9$ & --- & 85 \\
+LR + synopsis & 34.8 & $+2.0$ & $+1.1$ $[-0.2, +2.4]$ & 51 \\
+Transformer, genres only & 35.4 & $+2.5$ & --- & 15 \\
+Transformer + synopsis & 34.6 & $+1.7$ & $-0.8$ $[-1.7, +0.1]$ & 7 \\
+\bottomrule
+\end{tabular}
+\caption{Effect of synopsis context (361 users; paired differences in test accuracy points with 99\% CI).}
+\end{table}
+\textbf{Result.} Synopsis context does not measurably improve accuracy. For the transformer the difference is slightly
+negative ($-0.8$ points, 99\% CI includes zero); for LR it is slightly positive at the best-validation epoch ($+1.1$, CI includes zero)
+and significantly negative at epoch 300 ($-1.1$). Per-user accuracy is better for 24\% of users and worse for 32\% with the
+transformer. The extra token also shortens the best training time (optimal epoch 15 to 7), consistent with faster overfitting from more input
+dimensions on tiny per-user training sets. A plausible reason is that a 16-dimensional text summary adds many features to learn from a few hundred training ratings,
+and plot topics overlap heavily with genre. This is a negative result for this specific encoding, not proof that
+text context cannot help: richer text encoders or pooling information across users are untested.
 
 \section{Why did the paper not use deep neural networks?}
 Based on the paper's own framing, there are three reasons, none of them that deep models predict better.
@@ -108,6 +131,6 @@ not help here either.
 
 \section{Limitations and next steps}
 Per-user test sets are small (median 27 ratings), accuracy is dominated by each user's majority class, and genre
-flags carry little signal. Next: run the synopsis experiment once plot data is available, add richer features, and report accuracy as lift over the majority baseline throughout.
+flags carry little signal. Next: pool information across users (the paper's setting), try pretrained text embeddings for the synopsis, and report accuracy as lift over the majority baseline throughout.
 
 \end{document}
